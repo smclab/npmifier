@@ -1,0 +1,16 @@
+{
+  "name": "npmify",
+  "version": "0.1.0",
+  "description": "NPMify you Ti.Current projects!",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "titanium",
+    "npm",
+    "builder"
+  ],
+  "author": "Pier Paolo Ramon",
+  "license": "LGPL2.1"
+}
