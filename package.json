@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "description": "NPMify you Ti.Current projects!",
   "main": "index.js",
+  "bin": {
+    "npmify": "./bin/npmify",
+    "npmify-init": "./bin/npmify-init"
+  },
+  "preferGlobal": true,
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,5 +17,17 @@
     "builder"
   ],
   "author": "Pier Paolo Ramon",
-  "license": "LGPL2.1"
+  "license": "LGPL2.1",
+  "dependencies": {
+    "commander": "~2.1.0",
+    "when": "~2.7.1",
+    "xmldom": "~0.1.17",
+    "pkginfo": "~0.3.0",
+    "colors": "~0.6.2",
+    "prompt": "~0.2.12",
+    "mkdirp": "~0.3.5"
+  },
+  "peerDependencies": {
+    "titanium": "~3.2.0"
+  }
 }

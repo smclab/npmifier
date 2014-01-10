@@ -1,0 +1,39 @@
+#!/usr/bin/env node
+
+var program = require('commander');
+var pkginfo = require('pkginfo')(module);
+
+program
+	.version(exports.version, '-v, --version')
+	.description(exports.description)
+	.usage('COMMAND [ARGS] [OPTIONS]')
+	.command('init', 'initialize NPMify configuration in an app');
+
+program.parse(process.argv);
+
+if (!program.args[0]) {
+	program.help();
+}
+
+/*var command = program.args[0];
+
+if (!command) {
+	porgram.help();
+}
+else {
+	require('./npmify-' + command)(program);
+}*/
+
+/*require('../src/tiapp').fromPath(process.cwd()).done(function (tiapp) {
+	console.dir(tiapp.getPlugins());
+
+	console.dir(tiapp.installPlugin('npmify'));
+
+	console.log(" -- IPHONE ---")
+	console.dir(tiapp.getModulesFor({ platform: 'iphone' }));
+
+	console.log(" -- IPHONE and COMMONJS ---")
+	console.dir(tiapp.getModules({ platforms: [ 'iphone', 'commonjs' ] }));
+
+	//console.log(tiapp.toString());
+});*/

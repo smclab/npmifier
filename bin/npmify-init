@@ -1,0 +1,206 @@
+#!/usr/bin/env node
+
+const path = require('path');
+const program = require('commander');
+const when = require('when');
+
+program
+	.usage('[OPTIONS] [PROJECT_DIR]')
+	.option('-p, --project-dir <dir>', 'directory of the project to work on', process.cwd())
+	.option('-o, --project-only', "don’t check global installation")
+	.parse(process.argv);
+
+const npmify = require('..');
+const fs = require('../src/fs');
+const utils = require('../src/utils');
+const TiApp = require('../src/tiapp');
+const titaniumConfig = require('../src/config');
+
+const NPMIFY_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
+
+function setupPlugin() {
+	return program.projectOnly ? undefined : (
+		titaniumConfig.read()
+		.then(function (config) {
+			config.paths || (config.paths = {});
+			config.paths.plugins || (config.paths.plugins = []);
+
+			if (config.paths.plugins.indexOf(NPMIFY_PLUGIN_PATH) >= 0) {
+				utils.message('blue', "Global plugin installed");
+				return;
+			}
+
+			utils.message('yellow', "No global plugin installed");
+
+			return (
+				utils.yesno("Do you want me to install it in the global paths?", true)
+				.then(function (ok) {
+					if (ok) {
+						config.paths.plugins.push(NPMIFY_PLUGIN_PATH);
+
+						return (
+							titaniumConfig.save(config)
+							.then(function () {
+								utils.message('green', "Global plugin correctly installed");
+							})
+						);
+					}
+					else {
+						utils.message('red', "Global plugin not installed!");
+					}
+				})
+			);
+		})
+	);
+}
+
+function installPlugin() {
+	return TiApp.fromPath(program.projectDir).then(function (tiapp) {
+
+		program.tiapp = tiapp;
+
+		if (tiapp.hasPlugin('npmify')) {
+			utils.message('blue', "Plugin defined in 'tiapp.xml'");
+			return;
+		}
+
+		utils.message('yellow', "No plugin defined in this 'tiapp.xml'");
+
+		return (
+			utils.yesno("Do you want me to change this 'tiapp.xml'?", true)
+			.then(function (ok) {
+				if (!ok) {
+					utils.message('red', "The app will not be npmified!");
+				}
+				else {
+					tiapp.installPlugin('npmify');
+					return tiapp.saveToFile().then(function () {
+						utils.message('green', "Plugin correctly defined in 'tiapp.xml'");
+					});
+				}
+			})
+		);
+	});
+}
+
+function ensureSources() {
+	return when.all([
+		fs.isDirectory(path.resolve(program.projectDir, 'Sources')),
+		fs.isDirectory(path.resolve(program.projectDir, 'Resources'))
+	])
+	.spread(function (sources, resources) {
+		if (sources) {
+			utils.message('blue', "Sources directory found");
+			return false;
+		}
+
+		if (!sources && resources) {
+			utils.message('yellow', "I found a 'Resources' directory and no 'Sources' directory");
+			return utils.yesno("Do you want me to rename 'Resources' in 'Sources'?", true).tap(function (move) {
+				if (!move) utils.message('red', "'Sources' directory not built");
+			});
+		}
+		else {
+			return false;
+		}
+	})
+	.then(function (move) {
+		if (!move) return false;
+		else return fs.findSVN(program.projectDir).then(function (svn) {
+			if (!svn) return 'fs';
+			else {
+				utils.message('yellow', "Subversion folder found. Cannot simply move 'Resources' in 'Sources'.");
+				return utils.yesno("Do you want me to try `svn mv`?", false).then(function (wants) {
+					if (!wants) utils.message('red', "'Sources' directory not built");
+					return wants && 'svn';
+				});
+			}
+		});
+	})
+	.then(function (moveType) {
+		if (!moveType) {
+			return false;
+		}
+		else if (moveType === 'fs') {
+			return fs.mv(
+				path.resolve(program.projectDir, 'Resources'),
+				path.resolve(program.projectDir, 'Sources')
+			);
+		}
+		else if (moveType === 'svn') {
+			return fs.mvSVN(
+				path.resolve(program.projectDir, 'Resources'),
+				path.resolve(program.projectDir, 'Sources')
+			);
+		}
+	})
+	.then(function (moved) {
+		if (moved !== false) utils.message('green', "Correctly moved 'Resources' into 'Sources'");
+	});
+}
+
+function ensurePackage() {
+	return (
+		fs.isFile(path.resolve(program.projectDir, 'package.json'))
+		.then(function (package) {
+			if (package) {
+				utils.message('blue', "A 'package.json' found");
+				return false;
+			}
+
+			utils.message('yellow', "No 'package.json' found");
+
+			return utils.yesno("Do you want me to build one for you?", true);
+		})
+		.then(function (build) {
+			if (!build) {
+				utils.message('red', "No package built");
+				return;
+			}
+			else {
+				return (
+					fs.readFile(path.resolve(__dirname, '..', 'template', 'package.json'), 'utf8')
+					.then(JSON.parse)
+					.then(function (package) {
+
+						var roots = program.tiapp.getRoots();
+
+						package.name = roots[ 'id' ];
+						package.description = roots[ 'name' ];
+						package.version = roots[ 'version' ];
+						package.copyright = roots[ 'copyright' ];
+						package.author = roots[ 'publisher' ];
+						package.main = './Sources/app';
+
+						console.dir(package);
+
+						utils.message('green', "The 'package.json' was correctly built");
+					})
+				);
+			}
+		})
+	);
+}
+
+when.resolve()
+.then(SPACE)
+.then(setupPlugin)
+.then(SPACE)
+.then(installPlugin)
+.then(SPACE)
+.then(ensureSources)
+.then(SPACE)
+.then(ensurePackage)
+.then(SPACE)
+.done(function () {
+	utils.message('green', "Initialization finished");
+	utils.endMessage();
+}, function (err) {
+	utils.message('red', "An error occurred!")
+	throw err;
+});
+
+function SPACE(o) {
+	console.log('');
+	return o;
+}
