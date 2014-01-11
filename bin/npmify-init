@@ -116,7 +116,7 @@ keys.all({
 	return promptPackage(info);
 })
 .then(function (info) {
-	if (info.prompts.buildPackage || info.package.main) return info;
+	if (info.prompts.buildPackage || !info.package || info.package.main) return info;
 
 	info.buildPackage = true;
 
