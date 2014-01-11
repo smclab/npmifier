@@ -2,6 +2,7 @@
 const exec = require('child_process').exec;
 const fs = require('fs');
 const path = require('path');
+const keys = require('when/keys');
 const nodefn = require('when/node/function');
 
 function lift(from, name) {
@@ -34,9 +35,17 @@ exports.isDirectory = nodefn.lift(function (file, cb) {
 	});
 });
 
-exports.findSVN = function (start) {
+exports.findCVS = function (start) {
+	return keys.all({
+		svn: exports.findToRoot(start, '.svn'),
+		git: exports.findToRoot(start, '.git'),
+		hg: exports.findToRoot(start, '.hg')
+	});
+};
+
+exports.findToRoot = function (start, name) {
 	return (
-		exports.isDirectory(path.resolve(start, '.svn'))
+		exports.isDirectory(path.resolve(start, name))
 		.then(function (svn) {
 			if (svn) return true;
 
@@ -44,7 +53,7 @@ exports.findSVN = function (start) {
 
 			if (newstart === start) return false;
 
-			return exports.findSVN(newstart);
+			return exports.findToRoot(newstart, name);
 		})
 	);
 };

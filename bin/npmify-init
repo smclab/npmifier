@@ -3,11 +3,13 @@
 const path = require('path');
 const program = require('commander');
 const when = require('when');
+const keys = require('when/keys');
 
 program
 	.usage('[OPTIONS] [PROJECT_DIR]')
 	.option('-p, --project-dir <dir>', 'directory of the project to work on', process.cwd())
 	.option('-o, --project-only', "don’t check global installation")
+	.option('-c, --no-colors', "disable colors")
 	.parse(process.argv);
 
 const npmify = require('..');
@@ -17,6 +19,133 @@ const TiApp = require('../src/tiapp');
 const titaniumConfig = require('../src/config');
 
 const NPMIFY_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
+
+utils.colors = program.colors;
+
+keys.all({
+	tiapp: TiApp.fromPath(program.projectDir),
+	ticonfig: titaniumConfig.read(),
+	cvs: fs.findCVS(program.projectDir),
+	projectPlugin: false,
+	globalPlugin: hasGlobalPlugin(),
+	sourcesDir: fs.isDirectory(path.resolve(program.projectDir, 'Sources')),
+	resourcesDir: fs.isDirectory(path.resolve(program.projectDir, 'Resources')),
+	package: fs.isFile(path.resolve(program.projectDir, 'package.json'))
+})
+.then(function (info) {
+	info.projectPlugin = hasProjectPlugin(info.tiapp);
+	info.globalPlugin = hasGlobalPlugin(info.ticonfig);
+	return keys.all(info);
+})
+.then(function (info) {
+	info.prompts = {};
+	return when.resolve()
+	.then(ask({
+		name: 'installGlobalPlugin',
+		skip: program.projectOnly || info.globalPlugin,
+		def: true,
+		newline: true,
+		message: "No global plugin found",
+		prompt: "Do you want me to install it?",
+		warning: "Npmification will not happen automatically during build!"
+	}, info.prompts))
+	.then(ask({
+		name: 'installLocalPlugin',
+		skip: info.projectPlugin,
+		def: true,
+		newline: true,
+		message: "Plugin not installed for this app",
+		prompt: "Do you want me to configure it?",
+		warning: "Npmification will not happen automatically during build!"
+	}, info.prompts))
+	.then(ask({
+		name: 'buildPackage',
+		skip: info.package,
+		def: true,
+		newline: true,
+		message: "No 'package.json' found",
+		prompt: "I’ll build one for you, is it ok?",
+		warning: "You’ll need to manually configure a 'package.json'"
+	}, info.prompts))
+	.then(ask({
+		name: 'mkdirSources',
+		skip: info.sourcesDir || info.resourcesDir,
+		def: true,
+		newline: true,
+		message: "No 'Sources' directory found",
+		prompt: "Do you want me to make one for you?",
+		warning: "You’ll need to configure correctly the 'package.json'"
+	}, info.prompts))
+	.then(ask({
+		name: 'moveResources',
+		skip: info.sourcesDir || !info.resourcesDir,
+		def: true,
+		newline: true,
+		message: "No 'Sources' directory found",
+		prompt: "Do you want me to rename 'Resources'?",
+		warning: "You’ll need to configure correctly the 'package.json'"
+	}, info.prompts))
+	.then(ask({
+		name: 'trySVN',
+		skip: function () { return info.prompts.mkdirSources || !info.prompts.moveResources || !info.cvs.svn; },
+		def: true,
+		newline: false,
+		message: "...but looks like you’re using Subversion!",
+		prompt: "Do you want me to try to call `svn mv`? That’s pretty risky...",
+		warning: "You’ll need to configure correctly the 'package.json'"
+	}, info.prompts))
+	.yield(info);
+})
+.done(function () {
+	console.log('');
+	utils.message('green', "Initialization complete!")
+	console.log('');
+});
+
+function ask(cfg, into) {
+	return function () {
+
+		var name = result(cfg, 'name');
+		var skip = result(cfg, 'skip');
+		var def = result(cfg, 'def');
+		var newline = result(cfg, 'newline');
+		var message = result(cfg, 'message');
+		var prompt = result(cfg, 'prompt');
+		var warning = result(cfg, 'warning');
+
+		if (skip) return false;
+
+		if (newline) console.log('');
+		utils.message('yellow', message);
+		return utils.yesno(prompt, def).tap(function (result) {
+			if (into) into[ name ] = result;
+			if (!result) utils.message('red', warning);
+		});
+	};
+}
+
+function result(cfg, name) {
+	return typeof cfg[ name ] === 'function' ? cfg[ name ]() : cfg[ name ];
+}
+
+function hasGlobalPlugin(config) {
+	return config && config.paths && config.paths.plugins && config.paths.plugins.indexOf(NPMIFY_PLUGIN_PATH) >= 0;
+}
+
+function hasProjectPlugin(tiapp) {
+	return tiapp.hasPlugin('npmify');
+}
+
+function installGlobalPlugin(config) {
+	config.paths || (config.paths = {});
+	config.paths.plugins || (config.path.plugins = []);
+	config.paths.plugins.push(NPMIFY_PLUGIN_PATH);
+}
+
+function SPACE(o) {
+	console.log('');
+	return o;
+}
 
 function setupPlugin() {
 	return program.projectOnly ? undefined : (
@@ -182,7 +311,7 @@ function ensurePackage() {
 	);
 }
 
-when.resolve()
+/*when.resolve()
 .then(SPACE)
 .then(setupPlugin)
 .then(SPACE)
@@ -198,9 +327,4 @@ when.resolve()
 }, function (err) {
 	utils.message('red', "An error occurred!")
 	throw err;
-});
-
-function SPACE(o) {
-	console.log('');
-	return o;
-}
+});*/

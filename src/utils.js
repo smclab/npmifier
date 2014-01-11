@@ -1,12 +1,32 @@
 
+require('colors');
+
 const when = require('when');
 const prompt = require('prompt');
 const slice = Array.prototype.slice;
 
-prompt.message = ' • ';
+prompt.message = '• ';
 prompt.delimiter = '';
 
-exports.colors = true;
+Object.defineProperty(exports, 'colors', (function () {
+
+	var COLORS = true;
+
+	function get() {
+		return COLORS;
+	}
+
+	function set(colors) {
+		COLORS = colors;
+		prompt.colors = colors;
+	}
+
+	return {
+		get: get,
+		set: set
+	};
+
+}).call(null));
 
 exports.endMessage = function () {
 	console.log('');
