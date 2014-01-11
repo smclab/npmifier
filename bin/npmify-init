@@ -4,11 +4,13 @@ const path = require('path');
 const program = require('commander');
 const when = require('when');
 const keys = require('when/keys');
+const sequence = require('when/sequence');
 
 program
 	.usage('[OPTIONS] [PROJECT_DIR]')
 	.option('-p, --project-dir <dir>', 'directory of the project to work on', process.cwd())
 	.option('-o, --project-only', "don’t check global installation")
+	.option('-s, --simulate', "simulate actions, and don’t to nothing")
 	.option('-c, --no-colors', "disable colors")
 	.parse(process.argv);
 
@@ -22,6 +24,12 @@ const NPMIFY_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
 
 utils.colors = program.colors;
 
+if (program.simulate) {
+	console.log('');
+	utils.message('red', "SIMULATION MODE - No change will actually happen")
+	utils.message('red', "================================================")
+}
+
 keys.all({
 	tiapp: TiApp.fromPath(program.projectDir),
 	ticonfig: titaniumConfig.read(),
@@ -30,7 +38,10 @@ keys.all({
 	globalPlugin: hasGlobalPlugin(),
 	sourcesDir: fs.isDirectory(path.resolve(program.projectDir, 'Sources')),
 	resourcesDir: fs.isDirectory(path.resolve(program.projectDir, 'Resources')),
-	package: fs.isFile(path.resolve(program.projectDir, 'package.json'))
+	package: fs.readFile(path.resolve(program.projectDir, 'package.json'), 'utf8').then(JSON.parse).catch(function (err) {
+		if (err.code == 'ENOENT') return false;
+		else return when.reject(err);
+	})
 })
 .then(function (info) {
 	info.projectPlugin = hasProjectPlugin(info.tiapp);
@@ -50,7 +61,7 @@ keys.all({
 		warning: "Npmification will not happen automatically during build!"
 	}, info.prompts))
 	.then(ask({
-		name: 'installLocalPlugin',
+		name: 'installProjectPlugin',
 		skip: info.projectPlugin,
 		def: true,
 		newline: true,
@@ -96,9 +107,74 @@ keys.all({
 	}, info.prompts))
 	.yield(info);
 })
-.done(function () {
+.then(function (info) {
+	if (!info.prompts.buildPackage) return info;
+
 	console.log('');
-	utils.message('green', "Initialization complete!")
+	utils.message('blue', "Ok, now tell me something about your project!")
+
+	return promptPackage(info);
+})
+.then(function (info) {
+	if (info.prompts.buildPackage || info.package.main) return info;
+
+	info.buildPackage = true;
+
+	console.log('');
+	utils.message('yellow', "There’s no `main` property set in you 'package.json'");
+
+	return utils.prompts([
+		{
+			type: 'input',
+			name: 'main',
+			message: 'What should it be?',
+			default: './Sources/app'
+		}
+	]).then(function (results) {
+		info.package.main = results.main;
+		return info;
+	});
+})
+.then(function (info) {
+
+	if (program.simulate) return;
+
+	console.log('');
+
+	function noop() {
+		return 'noop';
+	}
+
+	return sequence([
+		(info.prompts.installGlobalPlugin) && installGlobalPlugin,
+		(info.prompts.installProjectPlugin) && installProjectPlugin,
+		(info.prompts.buildPackage) && buildPackage,
+		(info.prompts.trySVN) && moveResourcesSVN,
+		(!info.prompts.trySVN && info.prompts.moveResources) && moveResources
+	].map(function (f) {
+		return f || noop;
+	}), info);
+})
+.done(function (actions) {
+
+	var didnothing = actions.every(function (action) {
+		return action === 'noop';
+	});
+
+	if (didnothing) {
+		utils.message('green', "I did nothing! \\o/ woohooo!")
+		console.log('');
+	}
+	else {
+		console.log('');
+		utils.message('green', "Initialization complete!")
+		console.log('');
+	}
+
+}, function (err) {
+	console.log('');
+	utils.message('red', "An error occurred!");
+	console.error(err);
 	console.log('');
 });
 
@@ -136,195 +212,104 @@ function hasProjectPlugin(tiapp) {
 	return tiapp.hasPlugin('npmify');
 }
 
-function installGlobalPlugin(config) {
+function installGlobalPlugin(info) {
+	var config = info.ticonfig;
+
 	config.paths || (config.paths = {});
 	config.paths.plugins || (config.path.plugins = []);
 	config.paths.plugins.push(NPMIFY_PLUGIN_PATH);
+	return titaniumConfig.save(config).then(function () {
+		utils.message('green', "Global plugin installed");
+	});
+}
+
+function buildPackage(info) {
+	return fs.writeFile(
+		path.resolve(program.projectDir, 'package.json'),
+		JSON.stringify(info.package, null, 2), { encoding: 'utf8' }
+	).then(function () {
+		utils.message('green', "Successfully built 'package.json")
+	});
+}
+
+function moveResources(info) {
+	return fs.rename(
+		path.resolve(program.projectDir, 'Resources'),
+		path.resolve(program.projectDir, 'Sources')
+	).then(function () {
+		utils.message('green', "'Resources' successfully renamed in 'Sources'");
+	});
+}
+
+function moveResourcesSVN(info) {
+	return fs.mvSVN(
+		path.resolve(program.projectDir, 'Resources'),
+		path.resolve(program.projectDir, 'Sources')
+	).then(function () {
+		utils.message('green', "'Resources' successfully moved with `svn mv`");
+	});
+}
+
+function promptPackage(info) {
+	var roots = info.tiapp.getRoots();
+
+	var package = info.package || {};
+
+	function p(name, msg, def) {
+		if (def === 'not specified') def = undefined;
+
+		return {
+			name: name,
+			message: msg || name,
+			type: 'input',
+			default: package[ name ] || def
+		};
+	}
+
+	console.log('');
+
+	var tiappAuthor = roots[ 'publisher' ];
+
+	if (roots[ 'url' ]) {
+		tiappAuthor += ' (' + roots[ 'url' ] + ')';
+	}
+
+	return utils.prompts([
+		p('name', null, roots[ 'id' ]),
+		p('version', null, roots[ 'version' ]),
+		p('description', null, roots[ 'name' ] || path.basename(program.projectDir)),
+		p('guid', null, roots[ 'guid' ]),
+		p('author', null, tiappAuthor),
+		p('main', "main entry point", './Sources/app')
+	])
+	.then(function (package) {
+		info.package = package;
+
+		console.log('');
+
+		console.log(require('util').inspect(info.package, { colors: program.colors }).split(/[\r\n]+/g).map(function (line) {
+			return '  ' + line;
+		}).join('\n'));
+
+		console.log('');
+
+		utils.message(null, "This is the resulting 'package.json'.");
+
+		return utils.yesno("Is it ok?").then(function (ok) {
+			if (ok) return info;
+			else return promptPackage(info);
+		});
+	});
+}
+
+function installProjectPlugin(info) {
+	info.tiapp.installPlugin('npmify', 'latest');
+	return info.tiapp.saveToFile().then(function() {
+		utils.message('green', "Plugin installed in the project")
+	})
 }
 
 function SPACE(o) {
 	console.log('');
 	return o;
 }
-
-function setupPlugin() {
-	return program.projectOnly ? undefined : (
-		titaniumConfig.read()
-		.then(function (config) {
-			config.paths || (config.paths = {});
-			config.paths.plugins || (config.paths.plugins = []);
-
-			if (config.paths.plugins.indexOf(NPMIFY_PLUGIN_PATH) >= 0) {
-				utils.message('blue', "Global plugin installed");
-				return;
-			}
-
-			utils.message('yellow', "No global plugin installed");
-
-			return (
-				utils.yesno("Do you want me to install it in the global paths?", true)
-				.then(function (ok) {
-					if (ok) {
-						config.paths.plugins.push(NPMIFY_PLUGIN_PATH);
-
-						return (
-							titaniumConfig.save(config)
-							.then(function () {
-								utils.message('green', "Global plugin correctly installed");
-							})
-						);
-					}
-					else {
-						utils.message('red', "Global plugin not installed!");
-					}
-				})
-			);
-		})
-	);
-}
-
-function installPlugin() {
-	return TiApp.fromPath(program.projectDir).then(function (tiapp) {
-
-		program.tiapp = tiapp;
-
-		if (tiapp.hasPlugin('npmify')) {
-			utils.message('blue', "Plugin defined in 'tiapp.xml'");
-			return;
-		}
-
-		utils.message('yellow', "No plugin defined in this 'tiapp.xml'");
-
-		return (
-			utils.yesno("Do you want me to change this 'tiapp.xml'?", true)
-			.then(function (ok) {
-				if (!ok) {
-					utils.message('red', "The app will not be npmified!");
-				}
-				else {
-					tiapp.installPlugin('npmify');
-					return tiapp.saveToFile().then(function () {
-						utils.message('green', "Plugin correctly defined in 'tiapp.xml'");
-					});
-				}
-			})
-		);
-	});
-}
-
-function ensureSources() {
-	return when.all([
-		fs.isDirectory(path.resolve(program.projectDir, 'Sources')),
-		fs.isDirectory(path.resolve(program.projectDir, 'Resources'))
-	])
-	.spread(function (sources, resources) {
-		if (sources) {
-			utils.message('blue', "Sources directory found");
-			return false;
-		}
-
-		if (!sources && resources) {
-			utils.message('yellow', "I found a 'Resources' directory and no 'Sources' directory");
-			return utils.yesno("Do you want me to rename 'Resources' in 'Sources'?", true).tap(function (move) {
-				if (!move) utils.message('red', "'Sources' directory not built");
-			});
-		}
-		else {
-			return false;
-		}
-	})
-	.then(function (move) {
-		if (!move) return false;
-		else return fs.findSVN(program.projectDir).then(function (svn) {
-			if (!svn) return 'fs';
-			else {
-				utils.message('yellow', "Subversion folder found. Cannot simply move 'Resources' in 'Sources'.");
-				return utils.yesno("Do you want me to try `svn mv`?", false).then(function (wants) {
-					if (!wants) utils.message('red', "'Sources' directory not built");
-					return wants && 'svn';
-				});
-			}
-		});
-	})
-	.then(function (moveType) {
-		if (!moveType) {
-			return false;
-		}
-		else if (moveType === 'fs') {
-			return fs.mv(
-				path.resolve(program.projectDir, 'Resources'),
-				path.resolve(program.projectDir, 'Sources')
-			);
-		}
-		else if (moveType === 'svn') {
-			return fs.mvSVN(
-				path.resolve(program.projectDir, 'Resources'),
-				path.resolve(program.projectDir, 'Sources')
-			);
-		}
-	})
-	.then(function (moved) {
-		if (moved !== false) utils.message('green', "Correctly moved 'Resources' into 'Sources'");
-	});
-}
-
-function ensurePackage() {
-	return (
-		fs.isFile(path.resolve(program.projectDir, 'package.json'))
-		.then(function (package) {
-			if (package) {
-				utils.message('blue', "A 'package.json' found");
-				return false;
-			}
-
-			utils.message('yellow', "No 'package.json' found");
-
-			return utils.yesno("Do you want me to build one for you?", true);
-		})
-		.then(function (build) {
-			if (!build) {
-				utils.message('red', "No package built");
-				return;
-			}
-			else {
-				return (
-					fs.readFile(path.resolve(__dirname, '..', 'template', 'package.json'), 'utf8')
-					.then(JSON.parse)
-					.then(function (package) {
-
-						var roots = program.tiapp.getRoots();
-
-						package.name = roots[ 'id' ];
-						package.description = roots[ 'name' ];
-						package.version = roots[ 'version' ];
-						package.copyright = roots[ 'copyright' ];
-						package.author = roots[ 'publisher' ];
-						package.main = './Sources/app';
-
-						console.dir(package);
-
-						utils.message('green', "The 'package.json' was correctly built");
-					})
-				);
-			}
-		})
-	);
-}
-
-/*when.resolve()
-.then(SPACE)
-.then(setupPlugin)
-.then(SPACE)
-.then(installPlugin)
-.then(SPACE)
-.then(ensureSources)
-.then(SPACE)
-.then(ensurePackage)
-.then(SPACE)
-.done(function () {
-	utils.message('green', "Initialization finished");
-	utils.endMessage();
-}, function (err) {
-	utils.message('red', "An error occurred!")
-	throw err;
-});*/

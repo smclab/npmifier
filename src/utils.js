@@ -2,11 +2,8 @@
 require('colors');
 
 const when = require('when');
-const prompt = require('prompt');
+const inquirer = require("inquirer");
 const slice = Array.prototype.slice;
-
-prompt.message = '• ';
-prompt.delimiter = '';
 
 Object.defineProperty(exports, 'colors', (function () {
 
@@ -18,7 +15,6 @@ Object.defineProperty(exports, 'colors', (function () {
 
 	function set(colors) {
 		COLORS = colors;
-		prompt.colors = colors;
 	}
 
 	return {
@@ -39,9 +35,13 @@ exports.message = function (c) {
 		args[0] = args[0][c] || args[0];
 	}
 
-	args[0] = "  " + args[0];
+	if (c === 'green') {
+		args[0] = " ✔  " + args[0];
+	}
+	else {
+		args[0] = "    " + args[0];
+	}
 
-	//console.log('');
 	console.log.apply(console, args);
 };
 
@@ -65,22 +65,30 @@ exports.promptCanceled = function (err) {
 	}
 };
 
+exports.prompts = function (questions) {
+	return when.promise(function (resolve) {
+		inquirer.prompt(questions, resolve);
+	});
+};
+
 exports.yesno = function (message, def) {
 	if (def === true) def = 'yes';
 	if (def === false) def = 'no';
 
 	return when.promise(function (resolve, reject) {
-		prompt.get({
-			name: '__yesno__',
-			message: message,
-			warning: "Must respond yes or no",
-			validator: /y[es]*|n[o]?/i,
-			'default': def
-		}, function (err, results) {
-			if (err) reject(err);
-			else resolve(getYesNo(results.__yesno__));
-		});
-	}).catch(exports.promptCanceled);
+		return inquirer.prompt([
+			{
+				name: '__yesno__',
+				type: 'confirm',
+				prefix: function () { return 'XX'; },
+				suffix: function () { return '>>'; },
+				message: message,
+				default: def
+			}
+		], function (result) {
+			resolve(result.__yesno__);
+		})
+	});
 };
 
 function getYesNo(value) {
