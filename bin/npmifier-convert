@@ -8,7 +8,7 @@ const sequence = require('when/sequence');
 
 program
 	.usage('[OPTIONS] [PROJECT_DIR]')
-	.option('-p, --project-dir <dir>', 'directory of the project to work on', process.cwd())
+	.option('-p, --project-dir <dir>', 'directory of the project to work on', '.')
 	.option('-o, --project-only', "don’t check global installation")
 	.option('-s, --simulate', "simulate actions, and don’t to nothing")
 	.option('-c, --no-colors', "disable colors")
@@ -23,6 +23,9 @@ const titaniumConfig = require('../src/config');
 const NPMIFIER_PLUGIN_PATH = path.resolve(__dirname, '..', 'plugins');
 
 utils.colors = program.colors;
+
+program.projectDir = program.args[0] || program.projectDir;
+program.projectDir = path.resolve(process.cwd(), program.projectDir);
 
 if (program.simulate) {
 	console.log('');
