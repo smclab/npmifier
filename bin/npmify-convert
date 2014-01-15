@@ -137,9 +137,11 @@ keys.all({
 })
 .then(function (info) {
 
-	if (program.simulate) return;
-
 	console.log('');
+
+	if (program.simulate) {
+		return [];
+	}
 
 	function noop() {
 		return 'noop';
@@ -167,7 +169,7 @@ keys.all({
 	}
 	else {
 		console.log('');
-		utils.message('green', "Initialization complete!")
+		utils.message('green', "Conversion complete!")
 		console.log('');
 	}
 
@@ -307,9 +309,4 @@ function installProjectPlugin(info) {
 	return info.tiapp.saveToFile().then(function() {
 		utils.message('green', "Plugin installed in the project")
 	})
-}
-
-function SPACE(o) {
-	console.log('');
-	return o;
 }

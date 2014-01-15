@@ -7,7 +7,7 @@ program
 	.version(exports.version, '-v, --version')
 	.description(exports.description)
 	.usage('COMMAND [ARGS] [OPTIONS]')
-	.command('init', 'initialize NPMify configuration in an app');
+	.command('convert', 'npmifies an existing classic Titanium SDK application');
 
 program.parse(process.argv);
 

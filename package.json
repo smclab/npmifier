@@ -5,7 +5,7 @@
   "main": "index.js",
   "bin": {
     "npmify": "./bin/npmify",
-    "npmify-init": "./bin/npmify-init"
+    "npmify-convert": "./bin/npmify-convert"
   },
   "preferGlobal": true,
   "scripts": {
