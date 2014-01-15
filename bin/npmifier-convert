@@ -20,7 +20,7 @@ const utils = require('../src/utils');
 const TiApp = require('../src/tiapp');
 const titaniumConfig = require('../src/config');
 
-const NPMIFIER_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
+const NPMIFIER_PLUGIN_PATH = path.resolve(__dirname, '..', 'plugins');
 
 utils.colors = program.colors;
 
