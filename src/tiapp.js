@@ -103,6 +103,19 @@ TiApp.prototype.hasPlugin = function (id) {
 	return this.getPlugins()[ id ] != null;
 };
 
+TiApp.prototype.uninstallPlugin = function(id) {
+	var pluginsEl = this.getPluginsEl();
+	var pluginEl = this.getPluginEl(id);
+
+	if (!pluginsEl || !pluginEl) {
+		return false;
+	}
+
+	pluginsEl.removeChild(pluginEl);
+
+	return true;
+};
+
 TiApp.prototype.installPlugin = function (id, version) {
 	var forceVersion = version != null;
 

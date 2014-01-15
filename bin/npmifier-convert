@@ -423,7 +423,13 @@ function promptPackage(info) {
 }
 
 function installProjectPlugin(info) {
+
+	// Legacy reasons...
+
+	info.tiapp.uninstallPlugin('npmify');
+
 	info.tiapp.installPlugin('npmifier', 'latest');
+
 	return info.tiapp.saveToFile().then(function() {
 		utils.message('green', "Plugin installed in the project")
 	})
