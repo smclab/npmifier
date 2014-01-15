@@ -3,7 +3,10 @@ const exec = require('child_process').exec;
 const fs = require('fs');
 const path = require('path');
 const keys = require('when/keys');
+const when = require('when');
 const nodefn = require('when/node/function');
+
+const slice = Array.prototype.slice;
 
 function lift(from, name) {
 	exports[ name ] = nodefn.lift(from[ name ]);
@@ -47,7 +50,7 @@ exports.findToRoot = function (start, name) {
 	return (
 		exports.isDirectory(path.resolve(start, name))
 		.then(function (svn) {
-			if (svn) return true;
+			if (svn) return start;
 
 			var newstart = path.resolve(start, '..');
 
@@ -58,6 +61,22 @@ exports.findToRoot = function (start, name) {
 	);
 };
 
+// TODO Move to exec.js
+
+exports.exec = function () {
+	var args = slice.call(arguments).join(' ');
+
+	return when.promise(function (resolve, reject) {
+		exec(args, function (err, stdout, stderr) {
+			if (err) return reject([err, stdout, stderr]);
+			else resolve([stdout, stderr]);
+		});
+	});
+};
+
+exports.execEscape = escape;
+
+// Insufficient!
 function escape(arg) {
 	return '"' + arg + '"';
 }

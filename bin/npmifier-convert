@@ -14,13 +14,13 @@ program
 	.option('-c, --no-colors', "disable colors")
 	.parse(process.argv);
 
-const npmify = require('..');
+const npmifier = require('..');
 const fs = require('../src/fs');
 const utils = require('../src/utils');
 const TiApp = require('../src/tiapp');
 const titaniumConfig = require('../src/config');
 
-const NPMIFY_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
+const NPMIFIER_PLUGIN_PATH = require('path').resolve(__dirname, '..', 'plugins');
 
 utils.colors = program.colors;
 
@@ -46,6 +46,7 @@ keys.all({
 .then(function (info) {
 	info.projectPlugin = hasProjectPlugin(info.tiapp);
 	info.globalPlugin = hasGlobalPlugin(info.ticonfig);
+	info.cvsIgnoresOK = hasCVSIgnoresOk(info.cvs);
 	return keys.all(info);
 })
 .then(function (info) {
@@ -105,6 +106,15 @@ keys.all({
 		prompt: "Do you want me to try to call `svn mv`? That’s pretty risky...",
 		warning: "You’ll need to configure correctly the 'package.json'"
 	}, info.prompts))
+	.then(ask({
+		name: 'addToIgnore',
+		skip: info.cvsIgnoresOK || !(info.cvs.git || info.cvs.svn),
+		def: true,
+		newline: true,
+		message: "This project is versioned using " + getCVSName(info.cvs),
+		prompt: "I’ll add 'Resources' and 'node_modules' to the ignored files. Ok?",
+		warning: "Pay attention to you commits!"
+	}, info.prompts))
 	.yield(info);
 })
 .then(function (info) {
@@ -152,7 +162,8 @@ keys.all({
 		(info.prompts.installProjectPlugin) && installProjectPlugin,
 		(info.prompts.buildPackage) && buildPackage,
 		(info.prompts.trySVN) && moveResourcesSVN,
-		(!info.prompts.trySVN && info.prompts.moveResources) && moveResources
+		(!info.prompts.trySVN && info.prompts.moveResources) && moveResources,
+		(info.prompts.addToIgnore) && addToIgnore
 	].map(function (f) {
 		return f || noop;
 	}), info);
@@ -176,8 +187,8 @@ keys.all({
 }, function (err) {
 	console.log('');
 	utils.message('red', "An error occurred!");
-	console.error(err);
 	console.log('');
+	throw err;
 });
 
 function ask(cfg, into) {
@@ -206,12 +217,21 @@ function result(cfg, name) {
 	return typeof cfg[ name ] === 'function' ? cfg[ name ]() : cfg[ name ];
 }
 
+function getCVSName(cvs) {
+	return (
+		cvs.git ? 'git-scm' :
+		cvs.svn ? 'Subversion' :
+		cvs.hg  ? 'Mercurial' :
+		'[unknown]'
+	);
+}
+
 function hasGlobalPlugin(config) {
-	return config && config.paths && config.paths.plugins && config.paths.plugins.indexOf(NPMIFY_PLUGIN_PATH) >= 0;
+	return config && config.paths && config.paths.plugins && config.paths.plugins.indexOf(NPMIFIER_PLUGIN_PATH) >= 0;
 }
 
 function hasProjectPlugin(tiapp) {
-	return tiapp.hasPlugin('npmify');
+	return tiapp.hasPlugin('npmifier');
 }
 
 function installGlobalPlugin(info) {
@@ -219,9 +239,64 @@ function installGlobalPlugin(info) {
 
 	config.paths || (config.paths = {});
 	config.paths.plugins || (config.path.plugins = []);
-	config.paths.plugins.push(NPMIFY_PLUGIN_PATH);
+	config.paths.plugins.push(NPMIFIER_PLUGIN_PATH);
 	return titaniumConfig.save(config).then(function () {
 		utils.message('green', "Global plugin installed");
+	});
+}
+
+function hasCVSIgnoresOk(cvs) {
+	if (cvs.svn) return hasSVNIgnoresOk();
+	else if (cvs.git) return hasGITIgnoresOk();
+}
+
+function hasSVNIgnoresOk() {
+	return getSVNIgnores(program.projectDir).then(function (lines) {
+		return (
+			lines.indexOf('node_modules') >= 0 &&
+			lines.indexOf('Resources') >= 0
+		);
+	});
+}
+
+function getSVNIgnores(dir) {
+	return (
+		fs.findToRoot(dir, '.svn')
+	)
+	.then(function (isSVN) {
+		if (!isSVN) throw new Error("Not an SVN project");
+		return fs.exec('svn', 'propget', 'svn:ignore', fs.execEscape(dir));
+	})
+	.spread(function (stdout, stderr) {
+		return (stdout || "").split(/[\r\n]+/g);
+	});
+}
+
+function hasGITIgnoresOk() {
+	return TODO;
+}
+
+function addToIgnore(info) {
+	var cvs = info.cvs;
+	if (cvs.git) return addToGITIgnore();
+	else if (cvs.svn) return addToSVNIgnore();
+}
+
+function addToGITIgnore() {
+	return TODO;
+}
+
+function addToSVNIgnore() {
+	return getSVNIgnores(program.projectDir).then(function (lines) {
+		if (lines.indexOf('node_modules') < 0) {
+			lines.push('node_modules');
+		}
+
+		if (lines.indexOf('Resources') < 0) {
+			lines.push('Resources');
+		}
+
+		return fs.exec('svn', 'propset', 'svn:ignore', fs.execEscape(lines.join("\n")), program.projectDir);
 	});
 }
 
@@ -305,7 +380,7 @@ function promptPackage(info) {
 }
 
 function installProjectPlugin(info) {
-	info.tiapp.installPlugin('npmify', 'latest');
+	info.tiapp.installPlugin('npmifier', 'latest');
 	return info.tiapp.saveToFile().then(function() {
 		utils.message('green', "Plugin installed in the project")
 	})
