@@ -272,8 +272,30 @@ function getSVNIgnores(dir) {
 	});
 }
 
+function getGITIgnores(dir) {
+	return (
+		fs.readFile(path.resolve(dir, '.gitignore'), 'utf8')
+	)
+	.then(function (gitignore) {
+		return gitignore.split(/[\r\n]+/g);
+	})
+	.catch(function (err) {
+		if (err.code === 'ENOENT') return [];
+		else throw err;
+	});;
+}
+
 function hasGITIgnoresOk() {
-	return TODO;
+	return (
+		getGITIgnores(program.projectDir)
+	)
+	.then(function (lines) {
+		// Mmh...
+		return (
+			lines.indexOf('node_modules') >= 0 &&
+			lines.indexOf('Resources') >= 0
+		);
+	});
 }
 
 function addToIgnore(info) {
@@ -282,20 +304,41 @@ function addToIgnore(info) {
 	else if (cvs.svn) return addToSVNIgnore();
 }
 
+function addToIgnoreLines(lines) {
+
+	lines = lines.filter(function (line) {
+		return line.trim()
+	});
+
+	if (lines.indexOf('node_modules') < 0) {
+		lines.push('node_modules');
+	}
+
+	if (lines.indexOf('Resources') < 0) {
+		lines.push('Resources');
+	}
+
+	return lines;
+}
+
 function addToGITIgnore() {
-	return TODO;
+	return (
+		getGITIgnores(program.projectDir)
+	)
+	.then(addToIgnoreLines)
+	.then(function (lines) {
+		return fs.writeFile(path.resolve(program.projectDir, '.gitignore'), lines.join("\n"), {
+			encoding: 'utf8'
+		});
+	});
 }
 
 function addToSVNIgnore() {
-	return getSVNIgnores(program.projectDir).then(function (lines) {
-		if (lines.indexOf('node_modules') < 0) {
-			lines.push('node_modules');
-		}
-
-		if (lines.indexOf('Resources') < 0) {
-			lines.push('Resources');
-		}
-
+	return (
+		getSVNIgnores(program.projectDir)
+	)
+	.then(addToIgnoreLines)
+	.then(function (lines) {
 		return fs.exec('svn', 'propset', 'svn:ignore', fs.execEscape(lines.join("\n")), program.projectDir);
 	});
 }
