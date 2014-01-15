@@ -1,7 +1,7 @@
 {
   "name": "npmifier",
   "version": "0.1.0",
-  "description": "NPMifier you Ti.Current projects!",
+  "description": "npmify you Ti.Current projects!",
   "main": "index.js",
   "bin": {
     "npmifier": "./bin/npmifier",
