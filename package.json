@@ -1,11 +1,11 @@
 {
-  "name": "npmify",
+  "name": "npmifier",
   "version": "0.1.0",
-  "description": "NPMify you Ti.Current projects!",
+  "description": "NPMifier you Ti.Current projects!",
   "main": "index.js",
   "bin": {
-    "npmify": "./bin/npmify",
-    "npmify-convert": "./bin/npmify-convert"
+    "npmifier": "./bin/npmifier",
+    "npmifier-convert": "./bin/npmifier-convert"
   },
   "preferGlobal": true,
   "scripts": {
