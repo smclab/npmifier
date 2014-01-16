@@ -45,6 +45,11 @@ exports.message = function (c) {
 	console.log.apply(console, args);
 };
 
+exports.color = function (c, s) {
+	if (exports.colors) return s[c] || s;
+	else return s;
+}
+
 exports.log = function (c) {
 	var args = slice.call(arguments, 1);
 

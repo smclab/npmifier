@@ -16,6 +16,7 @@ lift(fs, 'readFile');
 lift(fs, 'writeFile');
 lift(fs, 'stat');
 lift(fs, 'rename');
+lift(fs, 'readdir');
 
 exports.mkdirp = nodefn.lift(require('mkdirp'));
 
