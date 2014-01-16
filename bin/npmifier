@@ -11,9 +11,7 @@ program
 
 program.parse(process.argv);
 
-if (!program.args[0]) {
-	program.help();
-}
+if (!program.args.length) program.help();
 
 /*var command = program.args[0];
 
