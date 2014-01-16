@@ -7,7 +7,8 @@ program
 	.version(exports.version, '-v, --version')
 	.description(exports.description)
 	.usage('COMMAND [ARGS] [OPTIONS]')
-	.command('convert', 'npmifies an existing classic Titanium SDK application');
+	.command('convert', "npmifies an existing classic Titanium SDK application")
+	.command('analyse', "ensures that require’s paths are correct")
 
 program.parse(process.argv);
 

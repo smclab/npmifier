@@ -184,6 +184,11 @@ keys.all({
 	else {
 		console.log('');
 		utils.message('green', "Conversion complete!")
+		utils.message('green', [
+			utils.color('green', "You should now run"),
+			utils.color('red', '`npmifier analyse`'),
+			utils.color('green', "to check your require paths!")
+		].join(' '))
 		console.log('');
 	}
 

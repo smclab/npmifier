@@ -5,6 +5,7 @@
   "main": "index.js",
   "bin": {
     "npmifier": "./bin/npmifier",
+    "npmifier-analyse": "./bin/npmifier-analyse",
     "npmifier-convert": "./bin/npmifier-convert"
   },
   "preferGlobal": true,
@@ -25,6 +26,7 @@
     "inquirer": "~0.4.0",
     "mkdirp": "~0.3.5",
     "pkginfo": "~0.3.0",
+    "titanium-platform-resolve": "~0.1.0",
     "when": "~2.7.1",
     "xmldom": "~0.1.17"
   },

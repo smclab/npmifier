@@ -1,0 +1,250 @@
+#!/usr/bin/env node
+
+const path = require('path');
+const program = require('commander');
+const when = require('when');
+const callbacks = require('when/callbacks');
+const keys = require('when/keys');
+const sequence = require('when/sequence');
+const detective = require('detective');
+const titaniumPlatformResolve = require('titanium-platform-resolve');
+
+const tryPaths = callbacks.lift(titaniumPlatformResolve.tryPaths);
+
+const DEFAULT_EXCLUDES = [ '.svn', '.git', '.hg', 'build', 'node_modules', 'acs' ];
+const ALL_PLATFORMS = 'android blackberry iphone tizen mobileweb'.split(' ');
+
+function list(val) { return val.split(','); }
+
+program
+	.usage('[OPTIONS] [PROJECT_DIR]')
+	.option('-s, --sources-dir <dirname>', "name of the main directory, defaults to 'Sources'", 'Sources')
+	.option('-p, --project-dir <dir>', "directory of the project to work on", '.')
+	.option('-e, --excludes <dirnames>', "directory names to skip", list, DEFAULT_EXCLUDES)
+	.option('-s, --no-simulate', "simulate actions, and don’t to nothing")
+	.option('-c, --no-colors', "disable colors")
+	.option('-v, --verbose', "show some info in the meanwhile")
+	.parse(process.argv);
+
+const utils = require('../src/utils');
+const fs = require('../src/fs');
+
+utils.colors = program.colors;
+
+program.projectDir = program.args[0] || program.projectDir;
+program.projectDir = path.resolve(process.cwd(), program.projectDir);
+
+const verbose = program.verbose;
+const excludes = program.excludes;
+
+function flat(array) {
+	return when(array, function (value) {
+		if (!Array.isArray(value)) {
+			return [ value ];
+		}
+		else {
+			return when.reduce(value, function (acc, cur) {
+				return when(cur, function (curValue) {
+					return when(flat(curValue), function (actualCurValue) {
+						return acc.concat(actualCurValue);
+					});
+				});
+			}, []);
+		}
+	});
+}
+
+function compact(array) {
+	return when.all(array, function (value) {
+		return value.filter(identity);
+	});
+}
+
+function indexerBy(by) {
+	return function (array) {
+		var results = {};
+		return when.all(array, function (values) {
+			values.forEach(function (change) {
+				results[change[by]] || (results[change[by]] = []);
+				results[change[by]].push(change);
+			});
+			return results;
+		});
+	};
+}
+
+function identity(o) {
+	return o;
+}
+
+function parseDir(dir, opts) {
+
+	if (excludes.indexOf(path.basename(dir)) >= 0) {
+		return;
+	}
+
+	if (verbose) utils.message('blue', "Passing through %s", dir);
+	return fs.readdir(dir).then(function (list) {
+		return sequence(list.map(function (l) {
+			return parse.bind(null, path.resolve(dir, l), opts);
+		}));
+	});
+}
+
+function parseFile(filename, opts) {
+	if (/\.js$/.test(filename)) {
+		if (verbose) utils.message('red', "Found %s", filename);
+		return fs.readFile(filename, 'utf8').then(function (src) {
+			var file = {};
+
+			file.src = src;
+			file.filename = filename;
+			file.changes = when.map(detective(src), function (from) {
+
+				var virtualFilename = removePlatformSpecific(filename);
+
+				var actual = path.resolve(opts.base, from);
+
+				var to = path.relative(path.dirname(virtualFilename), actual);
+
+				if (to.charAt(0) !== '.') {
+					to = './' + to;
+				}
+
+				if (from === to) {
+					return false;
+				}
+				else {
+					return fs.isFile(actual + '.js')
+					.then(function (isFile) {
+						return isFile || tryPaths(virtualFilename, to, [ '.js' ], ALL_PLATFORMS, false);
+					})
+					.then(function (file) {
+						if (file) return {
+							src: src,
+							filename: filename,
+							from: from,
+							to: to
+						};
+						else return false;
+					});
+				}
+			}).then(compact);
+
+			return keys.all(file);
+		});
+	}
+	else {
+		return false;
+	}
+}
+
+function parse(p, opts) {
+	return fs.isFile(p).then(function (file) {
+		return file ? parseFile(p, opts) : parseDir(p, opts);
+	})
+}
+
+function removePlatformSpecific(p) {
+	return p
+		.replace(/\/android\//g, '/')
+		.replace(/\/blackberry\//g, '/')
+		.replace(/\/iphone\//g, '/')
+		.replace(/\/mobileweb\//g, '/')
+		.replace(/\/tizen\//g, '/');
+}
+
+var base = path.resolve(program.projectDir, program.sourcesDir);
+
+var parsing = parse(program.projectDir, {
+	base: base
+})
+.then(flat)
+.then(compact);
+
+if (program.simulate === true) {
+	parsing.done(function (files) {
+		console.log('');
+		utils.message('red', "Simulation Mode");
+		utils.message('red', "===============");
+		console.log('');
+		utils.message('blue', "Changes to be made in %s", utils.color('grey', utils.color('grey', base)));
+		utils.message('blue', "----------------------%s", base.replace(/./g, '-'));
+
+		var filesCount = 0;
+		var changesCount = 0;
+
+		files.forEach(function (file) {
+			if (!file.changes.length) return;
+
+			filesCount += 1;
+			changesCount += file.changes.length;
+
+			console.log('');
+			utils.message('yellow', "Inside: %s", utils.color('grey', path.relative(base, file.filename)));
+			file.changes.forEach(function (change) {
+				console.log('');
+				utils.message('red',    "  from: %s", utils.color('grey', change.from));
+				utils.message('blue',   "    to: %s", utils.color('grey', change.to));
+			});
+			console.log('');
+		});
+
+		console.log('');
+
+		if (changesCount > 0) {
+			utils.message('green', "%s %s found in %s %s!", changesCount, (changesCount>1?'changes':'change'), filesCount, (filesCount>1?'files':'file'));
+			utils.message('green', [
+				utils.color('green', "Run "),
+				utils.color('yellow', '`npmifier analyse '),
+				utils.color('yellow', process.argv.slice(2).join(' ')),
+				utils.color('red',    ' --no-simulate'),
+				utils.color('yellow', '`'),
+				utils.color('green', " to apply this changes.")
+			].join(''))
+		}
+		else {
+			utils.message('green', "No change detected");
+		}
+
+		console.log('');
+	});
+}
+else if (program.simulate === false) {
+	parsing
+	.then(function (files) {
+		var filesCount = 0;
+		var changesCount = 0;
+
+		return when.map(files, function (file) {
+			if (!file.changes || !file.changes.length) return;
+
+			filesCount += 1;
+			changesCount += file.changes.length;
+
+			var src = file.src;
+
+			src = file.changes.reduce(function (src, change) {
+				return src
+					.split("'" + change.from + "'").join("'" + change.to + "'")
+					.split('"' + change.from + '"').join('"' + change.to + '"');
+			}, src);
+
+			if (program.verbose) utils.message('yellow', "Updated " + file.filename);
+
+			return fs.writeFile(file.filename, src, {
+				encoding: 'utf8'
+			});
+		}).then(function () {
+			return [ changesCount, filesCount ];
+		});
+	})
+	.done(function (counts) {
+		var changesCount = counts[0];
+		var filesCount = counts[1];
+
+		console.log('');
+		utils.message('green', "Correctly applied %s %s in %s %s", changesCount, (changesCount>1?'changes':'change'), filesCount, (filesCount>1?'files':'file'));
+		console.log('');
+	});
+}
