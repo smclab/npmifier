@@ -13,26 +13,3 @@ program
 program.parse(process.argv);
 
 if (!program.args.length) program.help();
-
-/*var command = program.args[0];
-
-if (!command) {
-	porgram.help();
-}
-else {
-	require('./npmify-' + command)(program);
-}*/
-
-/*require('../src/tiapp').fromPath(process.cwd()).done(function (tiapp) {
-	console.dir(tiapp.getPlugins());
-
-	console.dir(tiapp.installPlugin('npmify'));
-
-	console.log(" -- IPHONE ---")
-	console.dir(tiapp.getModulesFor({ platform: 'iphone' }));
-
-	console.log(" -- IPHONE and COMMONJS ---")
-	console.dir(tiapp.getModules({ platforms: [ 'iphone', 'commonjs' ] }));
-
-	//console.log(tiapp.toString());
-});*/
