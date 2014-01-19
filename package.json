@@ -31,7 +31,8 @@
     "pkginfo": "~0.3.0",
     "titanium-platform-resolve": "~0.1.0",
     "when": "~2.7.1",
-    "xmldom": "~0.1.17"
+    "xmldom": "~0.1.17",
+    "insert-module-globals": "~2.3.0"
   },
   "peerDependencies": {
     "titanium": "~3.2.0"

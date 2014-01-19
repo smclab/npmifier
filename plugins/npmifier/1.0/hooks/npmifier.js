@@ -17,6 +17,8 @@ const APP_SRC = "require('bundle');";
 const PRELUDE_PATH = path.resolve(__dirname, '..', '..', '..', '..', 'src', '_prelude.js');
 const PRELUDE_SRC = require('fs').readFileSync(PRELUDE_PATH, 'utf8');
 
+const GLOBAL_VARS = require('../../../../src/globals');
+
 const BANNER = [
 "____________________#####",
 "#####################___#############",
@@ -120,6 +122,7 @@ exports.init = function (logger, config, cli, appc) {
 		.then(function (b) {
 			return nodefn.call(b.bundle.bind(b), {
 				debug: deviceFamily !== 'production',
+				insertGlobalVars: GLOBAL_VARS,
 				ignoreMissing: opts.ignoreMissing,
 				standalone: pkg.name,
 				prelude: PRELUDE_SRC,
