@@ -8,6 +8,29 @@
 // orig method which is the requireuire for previous bundles
 
 (function outer (modules, cache, entry) {
+
+    var slice = Array.prototype.slice;
+
+    Function.prototype.bind || (Function.prototype.bind = function (ctx) {
+
+        if (typeof this !== "function") {
+            // closest thing possible to the ECMAScript 5 internal IsCallable function
+            throw new TypeError("Function.prototype.bind - what is trying to be bound is not callable");
+        }
+
+        var fn = this;
+        var args = slice.call(arguments, 1);
+
+        function binded() {
+            return fn.apply((this instanceof binded && ctx) ? this : ctx, args.concat(slice.call(arguments)));
+        }
+
+        binded.prototype = Object.create(fn.prototype);
+        binded.prototype.contructor = binded;
+
+        return binded;
+    });
+
     // Save the require from previous bundle to this closure if any
     var previousRequire = typeof require == "function" && require;
 
