@@ -70,10 +70,14 @@ exports.init = function (logger, config, cli, appc) {
 
 		var pkg = require(path.join(build.projectDir, 'package.json'));
 
-		var opts = pkg.npmify || pkg.browserify || {};
+		var opts = pkg.npmifier || pkg.browserify || {};
 
 		opts.extensions || (opts.extensions = [ '.js', '.json' ]);
 		opts.transforms || (opts.transforms = []);
+		opts.ignores || (opts.ignores = []);
+		opts.externals || (opts.externals = []);
+
+		opts.ignoreMissing = !!opts.ignoreMissing;
 
 		opts.transforms = opts.transforms.map(function (tr) {
 			return require(tr);
@@ -86,12 +90,12 @@ exports.init = function (logger, config, cli, appc) {
 
 		TiApp.fromPath(build.projectDir).then(function (tiapp) {
 
-			var externals = tiapp.getModules({
+			opts.externals = opts.externals.concat(tiapp.getModules({
 				platform: build.platformName,
 				deployType: deployType
 			}).map(function (module) {
 				return module.id;
-			});
+			}));
 
 			var b = browserify({
 				extensions: opts.extensions
@@ -103,20 +107,23 @@ exports.init = function (logger, config, cli, appc) {
 				b.transform(transform);
 			});
 
-			externals.forEach(function (external) {
+			opts.ignores.forEach(function (ignore) {
+				b.ignore(ignore);
+			});
+
+			opts.externals.forEach(function (external) {
 				b.exclude(external);
 			});
 
 			return b;
-
-		}).then(function (b) {
-			logger.error(PRELUDE_PATH);
+		})
+		.then(function (b) {
 			return nodefn.call(b.bundle.bind(b), {
 				debug: deviceFamily !== 'production',
-				ignoreMissing: false,
+				ignoreMissing: opts.ignoreMissing,
 				standalone: pkg.name,
 				prelude: PRELUDE_SRC,
-				preludePath: PRELUDE_PATH//'build/map/prelude.js'
+				preludePath: PRELUDE_PATH
 			});
 		})
 		.then(function (src) {
