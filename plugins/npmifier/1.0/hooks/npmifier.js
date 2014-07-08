@@ -136,7 +136,7 @@ exports.init = function (logger, config, cli, appc) {
 			]).yield(src);
 		})
 		.then(function (src) {
-			var sourceMap = getSourceMapFromSource(src, 'Resources/' + build.platformName + '/bundle.js.js', build.projectDir);
+			var sourceMap = getSourceMapFromSource(src, 'Resources/' + build.platformName + '/bundle.js', build.projectDir);
 
 			return when.all([
 				fs.writeFile(path.join(build.projectDir, 'Resources', 'app.js'), EMPTY_SRC),
