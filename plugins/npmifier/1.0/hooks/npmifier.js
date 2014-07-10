@@ -60,6 +60,10 @@ function getSourceMapFromSource(src, filename, projectDir) {
 	return result.toJSON();
 }
 
+function removeSourceMapFromContent(src) {
+	return src.replace(/^\s*\/\/@[^\n]*/m, '//...');
+}
+
 exports.cliVersion = '>=3.2';
 
 exports.init = function (logger, config, cli, appc) {
@@ -137,14 +141,15 @@ exports.init = function (logger, config, cli, appc) {
 		})
 		.then(function (src) {
 			var sourceMap = getSourceMapFromSource(src, 'Resources/' + build.platformName + '/bundle.js', build.projectDir);
+			var content = removeSourceMapFromContent(src);
 
 			return when.all([
 				fs.writeFile(path.join(build.projectDir, 'Resources', 'app.js'), EMPTY_SRC),
-				fs.writeFile(path.join(build.projectDir, 'Resources', build.platformName, 'bundle.js'), src),
+				fs.writeFile(path.join(build.projectDir, 'Resources', build.platformName, 'bundle.js'), content),
 				fs.writeFile(path.join(build.projectDir, 'build', 'map', 'prelude.js'), PRELUDE_SRC),
 				fs.writeFile(path.join(build.projectDir, 'build', 'map', 'Resources', build.platformName, 'bundle.js.map'), sourceMap),
 				fs.writeFile(path.join(build.projectDir, 'Resources', build.platformName, 'app.js'), APP_SRC)
-			]).yield(src);
+			]).yield(content);
 		})
 		.done(function () {
 			logger.info("NPMification complete");
