@@ -20,6 +20,10 @@
   ],
   "author": "Pier Paolo Ramon",
   "license": "LGPL2.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/smclab/npmifier.git"
+  },
   "dependencies": {
     "browserify": "~3.20.0",
     "colors": "~0.6.2",
